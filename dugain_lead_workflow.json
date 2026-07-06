@@ -7,7 +7,10 @@
       "name": "Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [100, 300],
+      "position": [
+        100,
+        300
+      ],
       "notesInFlow": true,
       "notes": "Start the lead generation workflow manually for live demonstrations."
     },
@@ -21,7 +24,10 @@
       "name": "Get RSS Funding",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [300, 100],
+      "position": [
+        300,
+        100
+      ],
       "onError": "continueRegularOutput",
       "notesInFlow": true,
       "notes": "Fetches raw XML funding signals for startups in India."
@@ -36,7 +42,10 @@
       "name": "Get RSS Expansion",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [300, 250],
+      "position": [
+        300,
+        250
+      ],
       "onError": "continueRegularOutput",
       "notesInFlow": true,
       "notes": "Fetches raw XML expansion and office launch signals."
@@ -51,7 +60,10 @@
       "name": "Get RSS Acquisition",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [300, 400],
+      "position": [
+        300,
+        400
+      ],
       "onError": "continueRegularOutput",
       "notesInFlow": true,
       "notes": "Fetches raw XML M&A and corporate buyout signals."
@@ -76,7 +88,10 @@
       "name": "Read Google Sheet URLs",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [300, 550],
+      "position": [
+        300,
+        550
+      ],
       "onError": "continueRegularOutput",
       "notesInFlow": true,
       "notes": "Retrieves only the Source URL column (Column L) to prevent duplicate runs."
@@ -89,7 +104,10 @@
       "name": "Parse Funding XML",
       "type": "n8n-nodes-base.xml",
       "typeVersion": 1,
-      "position": [500, 100],
+      "position": [
+        500,
+        100
+      ],
       "notesInFlow": true,
       "notes": "Explicitly parses raw Funding XML into a JSON object structure."
     },
@@ -101,7 +119,10 @@
       "name": "Parse Expansion XML",
       "type": "n8n-nodes-base.xml",
       "typeVersion": 1,
-      "position": [500, 250],
+      "position": [
+        500,
+        250
+      ],
       "notesInFlow": true,
       "notes": "Explicitly parses raw Expansion XML into a JSON object structure."
     },
@@ -113,7 +134,10 @@
       "name": "Parse Acquisition XML",
       "type": "n8n-nodes-base.xml",
       "typeVersion": 1,
-      "position": [500, 400],
+      "position": [
+        500,
+        400
+      ],
       "notesInFlow": true,
       "notes": "Explicitly parses raw Acquisition XML into a JSON object structure."
     },
@@ -125,7 +149,10 @@
       "name": "Merge & Tag Feeds",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 250],
+      "position": [
+        700,
+        250
+      ],
       "notesInFlow": true,
       "notes": "Unifies feeds and structures items according to standard contract schema."
     },
@@ -137,7 +164,10 @@
       "name": "URL Normalizer & Deduplicator",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300],
+      "position": [
+        900,
+        300
+      ],
       "notesInFlow": true,
       "notes": "Handles URL cleanup, stateful cross-run deduplication and prints execution metrics to console logs."
     },
@@ -150,7 +180,10 @@
       "name": "Loop Over Leads",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [1100, 300],
+      "position": [
+        1100,
+        300
+      ],
       "notesInFlow": true,
       "notes": "Processes deduplicated leads one-by-one to avoid API rate limits."
     },
@@ -166,7 +199,10 @@
       "name": "Jina Web Scraper",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1300, 200],
+      "position": [
+        1300,
+        200
+      ],
       "onError": "continueRegularOutput",
       "settings": {
         "retryOnFail": true,
@@ -184,7 +220,10 @@
       "name": "Handle Scrape Fallback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1500, 200],
+      "position": [
+        1500,
+        200
+      ],
       "notesInFlow": true,
       "notes": "Validates scraped page, removes clutter, enforces 8k character limit and falls back to RSS on error."
     },
@@ -192,33 +231,21 @@
       "parameters": {
         "method": "POST",
         "url": "https://api.groq.com/openai/v1/chat/completions",
-        "headers": {
-          "Authorization": "=Bearer {{ $env.GROQ_API_KEY || 'REPLACE_WITH_GROQ_API_KEY' }}",
-          "Content-Type": "application/json"
-        },
-        "body": {
-          "model": "llama-3.3-70b-versatile",
-          "messages": [
-            {
-              "role": "system",
-              "content": "You are a Senior Corporate Finance, Legal, and M&A Partner at Dugain Advisors.\nDugain Advisors is a premium Indian advisory firm offering services in:\n1. M&A Advisory & Business Restructuring (mergers, buyouts, JV setups, exits).\n2. Share Valuations & Financial Due Diligence (regulatory valuation certificates for tax/FDI, deal audits).\n3. Startup Advisory (ESOP pool structuring, cap table modeling, shareholder agreement drafting).\n4. Debt/Equity Fundraising Advisory (capital raises, debt structuring).\n5. India Entry Services (RBI/FEMA compliance, Indian subsidiary incorporation, FDI reporting).\n6. Virtual CFO, Corporate Tax, and Statutory compliance (withholding tax, regulatory audits).\n\nAnalyze the provided business news article to perform a high-quality qualification analysis of the company mentioned as a lead.\nDo NOT summarize the article. Do NOT write outreach templates.\n\nYou must evaluate:\n- What transaction or corporate transition occurred (e.g. Funding round, cross-border office expansion, acquisition)?\n- What are the immediate legal, regulatory, tax, and compliance needs that will arise from this event under Indian laws (e.g., FEMA filings with RBI, income tax valuation under Section 56(2)(viib), ESOP restructuring, board minutes)?\n- Which specific Dugain service is relevant and why?\n- Is this company a high-quality client to contact? What is your confidence (1 to 10)?\n- What are the risk factors (e.g., small transaction size, highly regulated sector, foreign ownership complexities)?\n\nYou must return your analysis in raw JSON format matching this schema exactly:\n{\n  \"companyName\": \"Name of the target company or null\",\n  \"founders\": [\"Founder Name(s)\"] or null,\n  \"businessEvent\": \"Core transaction/event details (e.g. raised $5M Series A) or null\",\n  \"companyStage\": \"Seed, Series A, Subsidiary, etc. or null\",\n  \"recommendedServices\": [\"List of relevant Dugain services (e.g. FEMA Compliance, Share Valuation)\"] or null,\n  \"confidence\": 1-10 (integer representing confidence score) or null,\n  \"leadQuality\": \"High / Medium / Low\",\n  \"qualificationReason\": \"Detailed legal/compliance/financial justification why they need Dugain's services\",\n  \"riskFactors\": [\"Specific risks identified (e.g. RBI scrutiny, tiny round size)\"] or null,\n  \"nextAdvisoryOpportunity\": \"Specific next milestone (e.g. RBI FC-GPRS Filing, Tax Valuation Certificate)\",\n  \"articleDate\": \"YYYY-MM-DD or null\",\n  \"sourceUrl\": \"String url\"\n}\nEnsure you do not invent data. If a field (like founders) is not mentioned, return null. Keep values factual and derived from the text."
-            },
-            {
-              "role": "user",
-              "content": "=Article Title: {{ $json.title }}\nSource: {{ $json.source }}\nBuying Signal Type: {{ $json.buyingSignal }}\nDate: {{ $json.articleDate }}\nURL: {{ $json.sourceUrl }}\n\nContent:\n{{ $json.articleContent }}"
-            }
-          ],
-          "temperature": 0.2,
-          "response_format": {
-            "type": "json_object"
-          }
-        }
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "={{ JSON.stringify({\n  \"Authorization\": \"Bearer \" + ($env.GROQ_API_KEY || 'REPLACE_WITH_GROQ_API_KEY'),\n  \"Content-Type\": \"application/json\"\n}) }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"llama-3.3-70b-versatile\",\n  messages: [\n    {\n      role: \"system\",\n      content: \"You are a Senior Corporate Finance, Legal, and M&A Partner at Dugain Advisors.\\nDugain Advisors is a premium Indian advisory firm offering services in:\\n1. M&A Advisory & Business Restructuring (mergers, buyouts, JV setups, exits).\\n2. Share Valuations & Financial Due Diligence (regulatory valuation certificates for tax/FDI, deal audits).\\n3. Startup Advisory (ESOP pool structuring, cap table modeling, shareholder agreement drafting).\\n4. Debt/Equity Fundraising Advisory (capital raises, debt structuring).\\n5. India Entry Services (RBI/FEMA compliance, Indian subsidiary incorporation, FDI reporting).\\n6. Virtual CFO, Corporate Tax, and Statutory compliance (withholding tax, regulatory audits).\\n\\nAnalyze the provided business news article to perform a high-quality qualification analysis of the company mentioned as a lead.\\nDo NOT summarize the article. Do NOT write outreach templates.\\n\\nYou must evaluate:\\n- What transaction or corporate transition occurred (e.g. Funding round, cross-border office expansion, acquisition)?\\n- What are the immediate legal, regulatory, tax, and compliance needs that will arise from this event under Indian laws (e.g., FEMA filings with RBI, income tax valuation under Section 56(2)(viib), ESOP restructuring, board minutes)?\\n- Which specific Dugain service is relevant and why?\\n- Is this company a high-quality client to contact? What is your confidence (1 to 10)?\\n- What are the risk factors (e.g., small transaction size, highly regulated sector, foreign ownership complexities)?\\n\\nYou must return your analysis in raw JSON format matching this schema exactly:\\n{\\n  \\\"companyName\\\": \\\"Name of the target company or null\\\",\\n  \\\"founders\\\": [\\\"Founder Name(s)\\\"] or null,\\n  \\\"businessEvent\\\": \\\"Core transaction/event details (e.g. raised $5M Series A) or null\\\",\\n  \\\"companyStage\\\": \\\"Seed, Series A, Subsidiary, etc. or null\\\",\\n  \\\"recommendedServices\\\": [\\\"List of relevant Dugain services (e.g. FEMA Compliance, Share Valuation)\\\"] or null,\\n  \\\"confidence\\\": 1-10 (integer representing confidence score) or null,\\n  \\\"leadQuality\\\": \\\"High / Medium / Low\\\",\\n  \\\"qualificationReason\\\": \\\"Detailed legal/compliance/financial justification why they need Dugain's services\\\",\\n  \\\"riskFactors\\\": [\\\"Specific risks identified (e.g. RBI scrutiny, tiny round size)\\\"] or null,\\n  \\\"nextAdvisoryOpportunity\\\": \\\"Specific next milestone (e.g. RBI FC-GPRS Filing, Tax Valuation Certificate)\\\",\\n  \\\"articleDate\\\": \\\"YYYY-MM-DD or null\\\",\\n  \\\"sourceUrl\\\": \\\"String url\\\"\\n}\\nEnsure you do not invent data. If a field (like founders) is not mentioned, return null. Keep values factual and derived from the text.\"\n    },\n    {\n      role: \"user\",\n      content: \"Article Title: \" + $json.title + \"\\nSource: \" + $json.source + \"\\nBuying Signal: \" + $json.buyingSignal + \"\\nDate: \" + $json.articleDate + \"\\nURL: \" + $json.sourceUrl + \"\\n\\nContent:\\n\" + $json.articleContent\n    }\n  ],\n  temperature: 0.2,\n  response_format: {\n    type: \"json_object\"\n  }\n}) }}"
       },
       "id": "groq-advisory-analyst-id",
       "name": "Groq Advisory Analyst",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1700, 200],
+      "position": [
+        1700,
+        200
+      ],
       "notesInFlow": true,
       "notes": "Queries Groq (Llama 3.3 70B) in JSON mode to perform senior-partner advisory lead qualification."
     },
@@ -230,7 +257,10 @@
       "name": "Parse AI Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1900, 200],
+      "position": [
+        1900,
+        200
+      ],
       "notesInFlow": true,
       "notes": "Extracts JSON from Groq, handles parsing errors, and joins string arrays with commas for Sheets compatibility."
     },
@@ -250,33 +280,72 @@
       "name": "Check Confidence",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2100, 200],
+      "position": [
+        2100,
+        200
+      ],
       "notesInFlow": true,
       "notes": "Separates leads based on confidence rating threshold (>= 7)."
     },
     {
       "parameters": {
         "operation": "append",
-        "sheetId": "placeholder-sheet-id"
+        "documentId": {
+          "__rl": true,
+          "value": "placeholder-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": []
+        },
+        "options": {}
       },
       "id": "write-high-priority-lead-id",
       "name": "Write High Priority Lead",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [2300, 100],
+      "position": [
+        2300,
+        100
+      ],
       "notesInFlow": true,
       "notes": "[PLACEHOLDER] Logs verified high-confidence advisory leads."
     },
     {
       "parameters": {
         "operation": "append",
-        "sheetId": "placeholder-sheet-id"
+        "documentId": {
+          "__rl": true,
+          "value": "placeholder-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": []
+        },
+        "options": {}
       },
       "id": "write-low-priority-lead-id",
       "name": "Write Low Priority Lead",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [2300, 300],
+      "position": [
+        2300,
+        300
+      ],
       "notesInFlow": true,
       "notes": "[PLACEHOLDER] Logs low-confidence leads for watchlist auditing."
     },
@@ -289,7 +358,10 @@
       "name": "Wait 5 Seconds",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [2550, 200],
+      "position": [
+        2550,
+        200
+      ],
       "notesInFlow": true,
       "notes": "Delay to respect API rate limits (TPM/RPM)."
     }
