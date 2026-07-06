@@ -1,0 +1,539 @@
+{
+  "name": "Dugain Advisors Lead Qualification Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger-id",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "notesInFlow": true,
+      "notes": "Start the lead generation workflow manually for live demonstrations."
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=%28%22funding%22+OR+%22raised%22+OR+%22investment%22+OR+%22capital+round%22+OR+%22Series+A%22+OR+%22Series+B%22+OR+%22pre-seed%22+OR+%22seed+round%22%29+AND+%28startup+OR+founder%29+AND+%28India+OR+Bangalore+OR+Bengaluru+OR+Mumbai+OR+Gurgaon+OR+Noida%29&hl=en-IN&gl=IN&ceid=IN:en",
+        "responseFormat": "text",
+        "options": {}
+      },
+      "id": "get-rss-funding-id",
+      "name": "Get RSS Funding",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 100],
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "Fetches raw XML funding signals for startups in India."
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=%28%22expansion%22+OR+%22new+office%22+OR+%22opens+office%22+OR+%22hiring+in+India%22+OR+%22subsidiary%22+OR+%22establishing+entity%22%29+AND+%28startup+OR+tech+OR+%22global+company%22%29+AND+%28India+OR+Bengaluru+OR+Gurgaon+OR+Noida+OR+Hyderabad%29&hl=en-IN&gl=IN&ceid=IN:en",
+        "responseFormat": "text",
+        "options": {}
+      },
+      "id": "get-rss-expansion-id",
+      "name": "Get RSS Expansion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 250],
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "Fetches raw XML expansion and office launch signals."
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=%28%22acquisition%22+OR+%22acquires%22+OR+%22merged%22+OR+%22merger%22+OR+%22buyout%22+OR+%22controlling+stake%22%29+AND+%28startup+OR+%22private+company%22%29+AND+%28India+OR+Indian%29&hl=en-IN&gl=IN&ceid=IN:en",
+        "responseFormat": "text",
+        "options": {}
+      },
+      "id": "get-rss-acquisition-id",
+      "name": "Get RSS Acquisition",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 400],
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "Fetches raw XML M&A and corporate buyout signals."
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "placeholder-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "range": "L:L",
+        "options": {}
+      },
+      "id": "read-google-sheet-urls-id",
+      "name": "Read Google Sheet URLs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [300, 550],
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "Retrieves only the Source URL column (Column L) to prevent duplicate runs."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "parse-funding-xml-id",
+      "name": "Parse Funding XML",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [500, 100],
+      "notesInFlow": true,
+      "notes": "Explicitly parses raw Funding XML into a JSON object structure."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "parse-expansion-xml-id",
+      "name": "Parse Expansion XML",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [500, 250],
+      "notesInFlow": true,
+      "notes": "Explicitly parses raw Expansion XML into a JSON object structure."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "parse-acquisition-xml-id",
+      "name": "Parse Acquisition XML",
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [500, 400],
+      "notesInFlow": true,
+      "notes": "Explicitly parses raw Acquisition XML into a JSON object structure."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Helper to parse dates to standard YYYY-MM-DD\nfunction parseDate(pubDateStr) {\n  if (!pubDateStr) return null;\n  try {\n    const d = new Date(pubDateStr);\n    if (isNaN(d.getTime())) return null;\n    return d.toISOString().split('T')[0];\n  } catch (e) {\n    return null;\n  }\n}\n\n// Helper to safely extract the publisher name from parsed XML source tag\nfunction getPublisher(source) {\n  if (!source) return 'Google News';\n  if (typeof source === 'string') return source;\n  if (source.$) return source.$; // xml2js standard text content accessor\n  if (source._) return source._;\n  return 'Google News';\n}\n\n// Helper to extract items from parsed XML JSON structure safely\nfunction extractRssItems(xmlNodeName) {\n  try {\n    const data = $(xmlNodeName).all();\n    if (!data || data.length === 0) return [];\n    \n    const root = data[0].json;\n    if (!root || !root.rss || !root.rss.channel) {\n      console.warn(`No valid XML channel data in node ${xmlNodeName}`);\n      return [];\n    }\n    \n    const items = root.rss.channel.item;\n    if (!items) return [];\n    \n    return Array.isArray(items) ? items : [items];\n  } catch (error) {\n    console.error(`Error extracting items from ${xmlNodeName}:`, error);\n    return [];\n  }\n}\n\n// Extract items from each parsed RSS stream\nconst fundingRaw = extractRssItems('Parse Funding XML');\nconst expansionRaw = extractRssItems('Parse Expansion XML');\nconst acquisitionRaw = extractRssItems('Parse Acquisition XML');\n\nconst standardizedArticles = [];\n\n// Helper to map raw XML items to the standardized contract object\nfunction mapToContract(item, signalType) {\n  return {\n    json: {\n      title: item.title || null,\n      description: item.description || null,\n      sourceUrl: item.link,\n      articleDate: parseDate(item.pubDate),\n      buyingSignal: signalType,\n      source: getPublisher(item.source)\n    }\n  };\n}\n\n// Map and tag funding items\nfor (const item of fundingRaw) {\n  if (item.link) {\n    standardizedArticles.push(mapToContract(item, 'Funding'));\n  }\n}\n\n// Map and tag expansion items\nfor (const item of expansionRaw) {\n  if (item.link) {\n    standardizedArticles.push(mapToContract(item, 'Expansion'));\n  }\n}\n\n// Map and tag acquisition items\nfor (const item of acquisitionRaw) {\n  if (item.link) {\n    standardizedArticles.push(mapToContract(item, 'Acquisition'));\n  }\n}\n\n// Output standardized contract objects\nreturn standardizedArticles;"
+      },
+      "id": "merge-and-tag-feeds-id",
+      "name": "Merge & Tag Feeds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 250],
+      "notesInFlow": true,
+      "notes": "Unifies feeds and structures items according to standard contract schema."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Helper to normalize URLs (strips query parameters, anchors, lowercase, and trailing slashes)\nfunction normalizeUrl(url) {\n  if (!url || typeof url !== 'string') return '';\n  try {\n    let decoded = decodeURIComponent(url);\n    let cleanUrl = decoded.split('?')[0];\n    cleanUrl = cleanUrl.split('#')[0];\n    cleanUrl = cleanUrl.toLowerCase().trim();\n    // Remove protocol and standard www subdomains\n    cleanUrl = cleanUrl.replace(/^(https?:\\/\\/)?(www\\.)?/, '');\n    if (cleanUrl.endsWith('/')) {\n      cleanUrl = cleanUrl.slice(0, -1);\n    }\n    return cleanUrl;\n  } catch (e) {\n    let clean = url.split('?')[0].split('#')[0].toLowerCase().trim();\n    clean = clean.replace(/^(https?:\\/\\/)?(www\\.)?/, '');\n    if (clean.endsWith('/')) {\n      clean = clean.slice(0, -1);\n    }\n    return clean;\n  }\n}\n\n// 1. Fetch standardized articles from the previous step\nconst mergedArticles = $('Merge & Tag Feeds').all();\n\n// 2. Fetch existing URLs from sheet database (Column L:L only)\nlet sheetRows = [];\ntry {\n  sheetRows = $('Read Google Sheet URLs').all();\n} catch (error) {\n  console.warn('Could not read existing URLs from Google Sheet:', error);\n}\n\n// 3. Extract and normalize existing database URLs\nconst existingUrls = new Set();\nfor (const row of sheetRows) {\n  if (row.json) {\n    // Column L header is \"Source URL\"\n    const rawUrl = row.json['Source URL'] || row.json['sourceUrl'] || row.json['url'];\n    if (rawUrl) {\n      existingUrls.add(normalizeUrl(rawUrl));\n    }\n  }\n}\n\n// 4. Perform stateful deduplication\nconst uniqueNewItems = [];\nconst seenInRun = new Set();\nlet duplicateCount = 0;\n\nfor (const item of mergedArticles) {\n  const rawUrl = item.json.sourceUrl;\n  if (!rawUrl) continue;\n  \n  const normUrl = normalizeUrl(rawUrl);\n  \n  // Filter out duplicates within the run and existing sheet records\n  if (seenInRun.has(normUrl) || existingUrls.has(normUrl)) {\n    duplicateCount++;\n    continue;\n  }\n  \n  seenInRun.add(normUrl);\n  \n  // Forward item adhering strictly to the contract\n  uniqueNewItems.push({\n    json: {\n      title: item.json.title,\n      description: item.json.description,\n      sourceUrl: item.json.sourceUrl,\n      articleDate: item.json.articleDate,\n      buyingSignal: item.json.buyingSignal,\n      source: item.json.source,\n      normalizedUrl: normUrl\n    }\n  });\n}\n\n// 5. Execution Logging to console (n8n Execution History capture)\nconsole.log('--- MODULE 1 EXECUTION METRICS ---');\nconsole.log(`Total RSS Articles Fetched: ${mergedArticles.length}`);\nconsole.log(`Duplicate Articles Removed: ${duplicateCount}`);\nconsole.log(`New Unique Articles Forwarded: ${uniqueNewItems.length}`);\nconsole.log('----------------------------------');\n\n// 6. Embed execution summary metadata on items for debugging downstream\nfor (const item of uniqueNewItems) {\n  item.json.meta = {\n    totalFetched: mergedArticles.length,\n    duplicatesRemoved: duplicateCount,\n    newForwarded: uniqueNewItems.length\n  };\n}\n\nreturn uniqueNewItems;"
+      },
+      "id": "url-normalizer-and-deduplicator-id",
+      "name": "URL Normalizer & Deduplicator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "notesInFlow": true,
+      "notes": "Handles URL cleanup, stateful cross-run deduplication and prints execution metrics to console logs."
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-over-leads-id",
+      "name": "Loop Over Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1100, 300],
+      "notesInFlow": true,
+      "notes": "Processes deduplicated leads one-by-one to avoid API rate limits."
+    },
+    {
+      "parameters": {
+        "url": "=https://r.jina.ai/{{ $json.sourceUrl }}",
+        "responseFormat": "text",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "jina-web-scraper-id",
+      "name": "Jina Web Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1300, 200],
+      "onError": "continueRegularOutput",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "notesInFlow": true,
+      "notes": "Queries Jina Reader to convert lead article URL to clean markdown text."
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Fetch Jina Scrape output from input\nconst scrapeInput = $input.item.json;\n\n// 2. Fetch original standardized article from Loop Over Leads\nconst originalArticle = $('Loop Over Leads').item.json;\n\n// 3. Define failure indicators (case-insensitive patterns)\nconst BLOCK_SIGNALS = [\n  'cloudflare',\n  'enable javascript',\n  'captcha',\n  'access denied',\n  '403 forbidden',\n  'error 1020',\n  'paywall',\n  'accept cookies',\n  'cookie wall',\n  'robot detection',\n  'just a moment'\n];\n\n// Define boilerplate phrases to remove\nconst BOILERPLATE_PATTERNS = [\n  'cookie settings', 'privacy policy', 'terms of use', 'all rights reserved',\n  'advertisement', 'sponsored', 'read more', 'related articles',\n  'share this article', 'newsletter', 'subscribe'\n];\n\n// Helper to check for scraper blocks or empty results\nfunction isFailedScrape(result) {\n  if (!result || result.error || result.statusCode >= 400) {\n    return true;\n  }\n  \n  const content = result.body;\n  // Treat content shorter than 300 characters as failed\n  if (!content || typeof content !== 'string' || content.trim().length < 300) {\n    return true;\n  }\n  \n  const lowercaseContent = content.toLowerCase();\n  for (const signal of BLOCK_SIGNALS) {\n    if (lowercaseContent.includes(signal)) {\n      return true;\n    }\n  }\n  \n  return false;\n}\n\n// Helper to clean scraped markdown text\nfunction cleanMarkdown(text) {\n  if (!text) return '';\n  \n  return text\n    // Replace tabs/multiple spaces with a single space\n    .replace(/[ \\t]+/g, ' ')\n    // Collapse three or more newlines into exactly two\n    .replace(/\\n{3,}/g, '\\n\\n')\n    // Filter out obvious cookie configuration/privacy guidelines lines\n    .split('\\n')\n    .filter(line => {\n      const trimmed = line.toLowerCase().trim();\n      for (const pattern of BOILERPLATE_PATTERNS) {\n        if (trimmed.includes(pattern)) {\n          return false;\n        }\n      }\n      return true;\n    })\n    .join('\\n')\n    .trim();\n}\n\n// Helper to truncate text to ~8,000 characters without cutting words in half\nfunction truncateToLimit(text, maxChars) {\n  if (!text || text.length <= maxChars) return text;\n  \n  let cutPos = maxChars;\n  const chunk = text.slice(0, maxChars);\n  \n  // Attempt cut at paragraph boundary (double newline)\n  let boundary = chunk.lastIndexOf('\\n\\n');\n  if (boundary > maxChars * 0.8) {\n    cutPos = boundary;\n  } else {\n    // Attempt cut at sentence boundary\n    boundary = chunk.lastIndexOf('. ');\n    if (boundary > maxChars * 0.8) {\n      cutPos = boundary + 1;\n    } else {\n      // Attempt cut at word boundary (space)\n      boundary = chunk.lastIndexOf(' ');\n      if (boundary > maxChars * 0.8) {\n        cutPos = boundary;\n      }\n    }\n  }\n  \n  return text.slice(0, cutPos).trim() + '\\n\\n[Content truncated due to size limits...]';\n}\n\n// Helper to generate current timestamp in YYYY-MM-DD HH:MM:SS format\nfunction getTimestamp() {\n  const now = new Date();\n  const pad = (num) => String(num).padStart(2, '0');\n  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;\n}\n\n// 4. Run verification and process content\nlet contentSource = 'Jina';\nlet finalContent = '';\n\nif (isFailedScrape(scrapeInput)) {\n  contentSource = 'RSS';\n  // Fallback to title and description\n  finalContent = `${originalArticle.title}\\n\\n${originalArticle.description || ''}`.trim();\n  console.log(`[Scrape Fallback] Jina scraping failed or too short (<300 chars) for: ${originalArticle.sourceUrl}. Using RSS Snippet fallback.`);\n} else {\n  // Clean Markdown\n  finalContent = cleanMarkdown(scrapeInput.body);\n  console.log(`[Scrape Success] Jina successfully scraped: ${originalArticle.sourceUrl}.`);\n}\n\n// 5. Enforce Token Guard (8000 character limit)\nfinalContent = truncateToLimit(finalContent, 8000);\n\n// 6. Calculate estimated tokens & quality metric\nconst estimatedTokens = Math.ceil(finalContent.length / 4);\nlet scrapeQuality = 'Fallback';\nif (contentSource === 'Jina') {\n  scrapeQuality = finalContent.length >= 1500 ? 'High' : 'Medium';\n}\n\n// 7. Build standard output contract\nconst outputContract = {\n  json: {\n    title: originalArticle.title,\n    description: originalArticle.description,\n    sourceUrl: originalArticle.sourceUrl,\n    normalizedUrl: originalArticle.normalizedUrl,\n    articleDate: originalArticle.articleDate,\n    buyingSignal: originalArticle.buyingSignal,\n    source: originalArticle.source,\n    contentSource: contentSource,\n    articleContent: finalContent,\n    contentLength: finalContent.length,\n    estimatedTokens: estimatedTokens,\n    scrapeQuality: scrapeQuality,\n    ingestedAt: getTimestamp()\n  }\n};\n\n// 8. Execution Logging\nconsole.log('--- MODULE 2 STATUS ---');\nconsole.log(`URL: ${originalArticle.sourceUrl}`);\nconsole.log(`Scrape Result: ${contentSource === 'Jina' ? 'SUCCESS' : 'FAILED (Fallback RSS Used)'}`);\nconsole.log(`Scrape Quality: ${scrapeQuality}`);\nconsole.log(`Final Content Length: ${finalContent.length} chars`);\nconsole.log(`Estimated Tokens: ${estimatedTokens}`);\nconsole.log('-----------------------');\n\nreturn [outputContract];"
+      },
+      "id": "handle-scrape-fallback-id",
+      "name": "Handle Scrape Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 200],
+      "notesInFlow": true,
+      "notes": "Validates scraped page, removes clutter, enforces 8k character limit and falls back to RSS on error."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "headers": {
+          "Authorization": "=Bearer {{ $env.GROQ_API_KEY || 'REPLACE_WITH_GROQ_API_KEY' }}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "model": "llama-3.3-70b-versatile",
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a Senior Corporate Finance, Legal, and M&A Partner at Dugain Advisors.\nDugain Advisors is a premium Indian advisory firm offering services in:\n1. M&A Advisory & Business Restructuring (mergers, buyouts, JV setups, exits).\n2. Share Valuations & Financial Due Diligence (regulatory valuation certificates for tax/FDI, deal audits).\n3. Startup Advisory (ESOP pool structuring, cap table modeling, shareholder agreement drafting).\n4. Debt/Equity Fundraising Advisory (capital raises, debt structuring).\n5. India Entry Services (RBI/FEMA compliance, Indian subsidiary incorporation, FDI reporting).\n6. Virtual CFO, Corporate Tax, and Statutory compliance (withholding tax, regulatory audits).\n\nAnalyze the provided business news article to perform a high-quality qualification analysis of the company mentioned as a lead.\nDo NOT summarize the article. Do NOT write outreach templates.\n\nYou must evaluate:\n- What transaction or corporate transition occurred (e.g. Funding round, cross-border office expansion, acquisition)?\n- What are the immediate legal, regulatory, tax, and compliance needs that will arise from this event under Indian laws (e.g., FEMA filings with RBI, income tax valuation under Section 56(2)(viib), ESOP restructuring, board minutes)?\n- Which specific Dugain service is relevant and why?\n- Is this company a high-quality client to contact? What is your confidence (1 to 10)?\n- What are the risk factors (e.g., small transaction size, highly regulated sector, foreign ownership complexities)?\n\nYou must return your analysis in raw JSON format matching this schema exactly:\n{\n  \"companyName\": \"Name of the target company or null\",\n  \"founders\": [\"Founder Name(s)\"] or null,\n  \"businessEvent\": \"Core transaction/event details (e.g. raised $5M Series A) or null\",\n  \"companyStage\": \"Seed, Series A, Subsidiary, etc. or null\",\n  \"recommendedServices\": [\"List of relevant Dugain services (e.g. FEMA Compliance, Share Valuation)\"] or null,\n  \"confidence\": 1-10 (integer representing confidence score) or null,\n  \"leadQuality\": \"High / Medium / Low\",\n  \"qualificationReason\": \"Detailed legal/compliance/financial justification why they need Dugain's services\",\n  \"riskFactors\": [\"Specific risks identified (e.g. RBI scrutiny, tiny round size)\"] or null,\n  \"nextAdvisoryOpportunity\": \"Specific next milestone (e.g. RBI FC-GPRS Filing, Tax Valuation Certificate)\",\n  \"articleDate\": \"YYYY-MM-DD or null\",\n  \"sourceUrl\": \"String url\"\n}\nEnsure you do not invent data. If a field (like founders) is not mentioned, return null. Keep values factual and derived from the text."
+            },
+            {
+              "role": "user",
+              "content": "=Article Title: {{ $json.title }}\nSource: {{ $json.source }}\nBuying Signal Type: {{ $json.buyingSignal }}\nDate: {{ $json.articleDate }}\nURL: {{ $json.sourceUrl }}\n\nContent:\n{{ $json.articleContent }}"
+            }
+          ],
+          "temperature": 0.2,
+          "response_format": {
+            "type": "json_object"
+          }
+        }
+      },
+      "id": "groq-advisory-analyst-id",
+      "name": "Groq Advisory Analyst",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1700, 200],
+      "notesInFlow": true,
+      "notes": "Queries Groq (Llama 3.3 70B) in JSON mode to perform senior-partner advisory lead qualification."
+    },
+    {
+      "parameters": {
+        "jsCode": "const groqResult = $input.item.json;\nconst originalLead = $('Handle Scrape Fallback').item.json;\n\nfunction getTimestamp() {\n  const now = new Date();\n  const pad = (num) => String(num).padStart(2, '0');\n  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;\n}\n\nlet aiContent = {};\ntry {\n  // Extract content string from Groq payload\n  let rawContent = groqResult.choices[0].message.content;\n  \n  // Clean markdown wrapper backticks if present\n  rawContent = rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/, '').trim();\n  \n  aiContent = JSON.parse(rawContent);\n} catch (e) {\n  console.error(\"Failed to parse Groq AI response:\", e);\n  // Fallback object in case of complete parsing failure\n  aiContent = {\n    companyName: originalLead.title.split(' ')[0] || 'Unknown',\n    founders: null,\n    businessEvent: 'Parsing Error: AI response was not valid JSON',\n    companyStage: null,\n    recommendedServices: [],\n    confidence: 1,\n    leadQuality: 'Low',\n    qualificationReason: 'Complete parser error on AI output. Review execution logs.',\n    riskFactors: [],\n    nextAdvisoryOpportunity: 'Manual review required'\n  };\n}\n\n// Standardize keys and fallback values\nconst companyName = aiContent.companyName || originalLead.title.split(' ')[0] || 'Unknown';\nconst founders = Array.isArray(aiContent.founders) ? aiContent.founders.join(', ') : (aiContent.founders || 'Unknown');\nconst businessEvent = aiContent.businessEvent || originalLead.description || 'Unknown event';\nconst companyStage = aiContent.companyStage || 'Unknown';\nconst recommendedServices = Array.isArray(aiContent.recommendedServices) ? aiContent.recommendedServices.join(', ') : (aiContent.recommendedServices || 'General Consulting');\nconst confidence = typeof aiContent.confidence === 'number' ? aiContent.confidence : parseInt(aiContent.confidence) || 5;\nconst leadQuality = aiContent.leadQuality || (confidence >= 7 ? 'High' : (confidence >= 4 ? 'Medium' : 'Low'));\nconst qualificationReason = aiContent.qualificationReason || 'No reasoning provided by AI.';\nconst riskFactors = Array.isArray(aiContent.riskFactors) ? aiContent.riskFactors.join(', ') : (aiContent.riskFactors || 'None');\nconst nextAdvisoryOpportunity = aiContent.nextAdvisoryOpportunity || 'General consultation';\n\n// Output standard mapped contract matching Google Sheets column structure\nreturn [{\n  json: {\n    companyName: companyName,\n    founders: founders,\n    businessEvent: businessEvent,\n    companyStage: companyStage,\n    recommendedServices: recommendedServices,\n    leadQuality: leadQuality,\n    confidence: confidence,\n    qualificationReason: qualificationReason,\n    riskFactors: riskFactors,\n    nextAdvisoryOpportunity: nextAdvisoryOpportunity,\n    articleDate: originalLead.articleDate || aiContent.articleDate || 'Unknown',\n    sourceUrl: originalLead.sourceUrl,\n    processedTimestamp: getTimestamp()\n  }\n}];"
+      },
+      "id": "parse-ai-response-id",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1900, 200],
+      "notesInFlow": true,
+      "notes": "Extracts JSON from Groq, handles parsing errors, and joins string arrays with commas for Sheets compatibility."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.confidence }}",
+              "operation": "largerEqual",
+              "value2": 7
+            }
+          ]
+        }
+      },
+      "id": "check-confidence-id",
+      "name": "Check Confidence",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2100, 200],
+      "notesInFlow": true,
+      "notes": "Separates leads based on confidence rating threshold (>= 7)."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "placeholder-sheet-id"
+      },
+      "id": "write-high-priority-lead-id",
+      "name": "Write High Priority Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2300, 100],
+      "notesInFlow": true,
+      "notes": "[PLACEHOLDER] Logs verified high-confidence advisory leads."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "placeholder-sheet-id"
+      },
+      "id": "write-low-priority-lead-id",
+      "name": "Write Low Priority Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2300, 300],
+      "notesInFlow": true,
+      "notes": "[PLACEHOLDER] Logs low-confidence leads for watchlist auditing."
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "seconds"
+      },
+      "id": "wait-5-seconds-id",
+      "name": "Wait 5 Seconds",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2550, 200],
+      "notesInFlow": true,
+      "notes": "Delay to respect API rate limits (TPM/RPM)."
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get RSS Funding",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get RSS Expansion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get RSS Acquisition",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Google Sheet URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RSS Funding": {
+      "main": [
+        [
+          {
+            "node": "Parse Funding XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RSS Expansion": {
+      "main": [
+        [
+          {
+            "node": "Parse Expansion XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RSS Acquisition": {
+      "main": [
+        [
+          {
+            "node": "Parse Acquisition XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Google Sheet URLs": {
+      "main": [
+        [
+          {
+            "node": "URL Normalizer & Deduplicator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Funding XML": {
+      "main": [
+        [
+          {
+            "node": "Merge & Tag Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Expansion XML": {
+      "main": [
+        [
+          {
+            "node": "Merge & Tag Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Acquisition XML": {
+      "main": [
+        [
+          {
+            "node": "Merge & Tag Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge & Tag Feeds": {
+      "main": [
+        [
+          {
+            "node": "URL Normalizer & Deduplicator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URL Normalizer & Deduplicator": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Leads": {
+      "main": [
+        [
+          {
+            "node": "Jina Web Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Jina Web Scraper": {
+      "main": [
+        [
+          {
+            "node": "Handle Scrape Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Scrape Fallback": {
+      "main": [
+        [
+          {
+            "node": "Groq Advisory Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Advisory Analyst": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Check Confidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Confidence": {
+      "main": [
+        [
+          {
+            "node": "Write High Priority Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Low Priority Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write High Priority Lead": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Low Priority Lead": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 Seconds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 Seconds": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "dugain-lead-workflow-v1",
+  "id": "dugain-lead-workflow",
+  "meta": {
+    "instanceId": "local-instance"
+  },
+  "tags": []
+}
